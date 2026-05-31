@@ -43,7 +43,7 @@ jobs:
             Start-Service -Name $ServiceName
         }
         
-        # Wait up to 30 seconds for the service to accept handshakes completely
+        # Wait upto 30 seconds for the service to accept handshakes completely
         Write-Host "Waiting for database engine initialization..."
         Start-Sleep -Seconds 15
 
