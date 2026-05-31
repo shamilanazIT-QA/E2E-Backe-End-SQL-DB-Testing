@@ -8,7 +8,7 @@ on:
 
 jobs:
   run-tests:
-    runs-on: windows-latest  # Matches your local Windows/SQL Express environment
+    runs-on: windows-latest
 
     steps:
     # 1. Pull down your repository code into the runner
@@ -31,8 +31,8 @@ jobs:
     - name: Initialize SQL Server Database and Seed Data
       shell: powershell
       run: |
-        # Connect to the default local SQL instance on the Windows runner
-        $Server = "localhost\SQLExpress"
+        # FIX: GitHub's built-in SQL Server is the default instance, accessed via "localhost"
+        $Server = "localhost"
         
         # Create database
         Invoke-Sqlcmd -ServerInstance $Server -Query "CREATE DATABASE Bussiness_DB;"
