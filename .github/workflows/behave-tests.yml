@@ -27,21 +27,20 @@ jobs:
         python -m pip install --upgrade pip
         pip install pandas sqlalchemy pyodbc behave
 
-    # 4. Spin up Local DB Environment & Seed Mock Schema/Data
-    - name: Initialize SQL Server Database and Seed Data
+    # 4. Spin up a real, running SQL Server Engine via Marketplace Action
+    - name: Install and Initialize SQL Server
+      uses: Particular/install-sql-server-action@v1.4.0
+      with:
+        catalog: Bussiness_DB
+        sqlserver-version: 2022
+
+    # 5. Seed Mock Schema Structures and Test Data Records
+    - name: Seed Database Schema and Data Rows
       shell: powershell
       run: |
-        # 🌟 FORCE START THE GITHUB SQL SERVER SERVICE 🌟
-        echo "Starting SQL Server service..."
-        Start-Service -Name "MSSQLSERVER"
-        Get-Service -Name "MSSQLSERVER" # Double checks that it is running
-        
         $Server = "localhost"
         
-        # Create database
-        Invoke-Sqlcmd -ServerInstance $Server -Query "CREATE DATABASE Bussiness_DB;"
-        
-        # Build tables and triggers exactly matching your database schema
+        # Build tables and triggers exactly matching your database schema layout
         Invoke-Sqlcmd -ServerInstance $Server -Query "
         USE Bussiness_DB;
         
@@ -105,7 +104,7 @@ jobs:
         );
         "
         
-        # Create your trigger
+        # Create your data trigger mapping
         Invoke-Sqlcmd -ServerInstance $Server -Query "
         USE Bussiness_DB;
         EXEC('
@@ -123,7 +122,7 @@ jobs:
         ');
         "
         
-        # Seed the exact records required for your Behave scenario to pass
+        # Seed records required for Behave scenario constraints to clear successfully
         Invoke-Sqlcmd -ServerInstance $Server -Query "
         USE Bussiness_DB;
         INSERT INTO departments (department_name) VALUES ('Sales');
@@ -134,7 +133,7 @@ jobs:
         INSERT INTO sales (product_id, customer_id, quantity, sale_price, date) VALUES (1, 1, 2, 950.00, '2025-08-10');
         "
 
-    # 5. Run Behave tests
+    # 6. Run Behave tests
     - name: Run Automated Behave Tests
       run: |
         behave
