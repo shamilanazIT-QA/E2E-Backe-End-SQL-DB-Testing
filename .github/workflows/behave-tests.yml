@@ -31,7 +31,11 @@ jobs:
     - name: Initialize SQL Server Database and Seed Data
       shell: powershell
       run: |
-        # FIX: GitHub's built-in SQL Server is the default instance, accessed via "localhost"
+        # 🌟 FORCE START THE GITHUB SQL SERVER SERVICE 🌟
+        echo "Starting SQL Server service..."
+        Start-Service -Name "MSSQLSERVER"
+        Get-Service -Name "MSSQLSERVER" # Double checks that it is running
+        
         $Server = "localhost"
         
         # Create database
