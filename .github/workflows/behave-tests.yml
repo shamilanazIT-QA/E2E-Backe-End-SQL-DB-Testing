@@ -27,18 +27,35 @@ jobs:
         python -m pip install --upgrade pip
         pip install pandas sqlalchemy pyodbc behave
 
-    # 4. Spin up a real, running SQL Server Engine via Marketplace Action
-    - name: Install and Initialize SQL Server
-      uses: Particular/install-sql-server-action@v1.4.0
-      with:
-        catalog: Bussiness_DB
-        sqlserver-version: 2022
+    # 4. Install and Start SQL Server Express natively using Chocolatey
+    - name: Spin up SQL Server Express Instance
+      shell: powershell
+      run: |
+        echo "Installing SQL Server Express via Chocolatey..."
+        choco install sql-server-express --version=2022.16.0.20260305 -y --no-progress
+        
+        echo "Ensuring SQL Server Service is fully started..."
+        # On a local SQLExpress install, the service name is MSSQL$SQLEXPRESS
+        $ServiceName = "MSSQL`$SQLEXPRESS"
+        
+        # Start it if it isn't running yet
+        if ((Get-Service $ServiceName).Status -ne 'Running') {
+            Start-Service -Name $ServiceName
+        }
+        
+        # Wait up to 30 seconds for the service to accept handshakes completely
+        Write-Host "Waiting for database engine initialization..."
+        Start-Sleep -Seconds 15
 
     # 5. Seed Mock Schema Structures and Test Data Records
     - name: Seed Database Schema and Data Rows
       shell: powershell
       run: |
-        $Server = "localhost"
+        # Point to the local SQLExpress named instance we just installed
+        $Server = "localhost\SQLEXPRESS"
+        
+        # Create database catalog container
+        Invoke-Sqlcmd -ServerInstance $Server -Query "CREATE DATABASE Bussiness_DB;"
         
         # Build tables and triggers exactly matching your database schema layout
         Invoke-Sqlcmd -ServerInstance $Server -Query "
@@ -104,7 +121,7 @@ jobs:
         );
         "
         
-        # Create your data trigger mapping
+        # Create your database trigger
         Invoke-Sqlcmd -ServerInstance $Server -Query "
         USE Bussiness_DB;
         EXEC('
@@ -122,7 +139,7 @@ jobs:
         ');
         "
         
-        # Seed records required for Behave scenario constraints to clear successfully
+        # Seed records required for Behave integration scenario to clear successfully
         Invoke-Sqlcmd -ServerInstance $Server -Query "
         USE Bussiness_DB;
         INSERT INTO departments (department_name) VALUES ('Sales');
