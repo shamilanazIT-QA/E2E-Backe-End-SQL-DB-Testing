@@ -47,18 +47,17 @@ jobs:
         Write-Host "Waiting for database engine initialization..."
         Start-Sleep -Seconds 15
 
-    # 5. Seed Mock Schema Structures and Test Data Records
     - name: Seed Database Schema and Data Rows
       shell: powershell
       run: |
         # Point to the local SQLExpress named instance we just installed
         $Server = "localhost\SQLEXPRESS"
         
-        # Create database catalog container
-        Invoke-Sqlcmd -ServerInstance $Server -Query "CREATE DATABASE Bussiness_DB;"
+        # Create database catalog container (Adding -TrustServerCertificate to bypass SSL checks)
+        Invoke-Sqlcmd -ServerInstance $Server -TrustServerCertificate -Query "CREATE DATABASE Bussiness_DB;"
         
         # Build tables and triggers exactly matching your database schema layout
-        Invoke-Sqlcmd -ServerInstance $Server -Query "
+        Invoke-Sqlcmd -ServerInstance $Server -TrustServerCertificate -Query "
         USE Bussiness_DB;
         
         CREATE TABLE departments (
