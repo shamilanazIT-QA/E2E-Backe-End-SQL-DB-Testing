@@ -1,0 +1,136 @@
+name: Python Database Integration Testing
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+
+jobs:
+  run-tests:
+    runs-on: windows-latest  # Matches your local Windows/SQL Express environment
+
+    steps:
+    # 1. Pull down your repository code into the runner
+    - name: Checkout Repository Code
+      uses: actions/checkout@v4
+
+    # 2. Set up the Python environment
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    # 3. Install dependencies (Pandas, SQLAlchemy, PyODBC, Behave)
+    - name: Install Python Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pandas sqlalchemy pyodbc behave
+
+    # 4. Spin up Local DB Environment & Seed Mock Schema/Data
+    - name: Initialize SQL Server Database and Seed Data
+      shell: powershell
+      run: |
+        # Connect to the default local SQL instance on the Windows runner
+        $Server = "localhost\SQLExpress"
+        
+        # Create database
+        Invoke-Sqlcmd -ServerInstance $Server -Query "CREATE DATABASE Bussiness_DB;"
+        
+        # Build tables and triggers exactly matching your database schema
+        Invoke-Sqlcmd -ServerInstance $Server -Query "
+        USE Bussiness_DB;
+        
+        CREATE TABLE departments (
+            department_id INT IDENTITY(1,1) PRIMARY KEY,
+            department_name VARCHAR(100) NOT NULL
+        );
+        
+        CREATE TABLE employees (
+            employee_id INT IDENTITY(1,1) PRIMARY KEY,
+            name VARCHAR(100) NOT NULL,
+            position VARCHAR(50),
+            department_id INT NOT NULL,
+            hire_date DATE NOT NULL,
+            FOREIGN KEY (department_id) REFERENCES departments(department_id)
+        );
+        
+        CREATE TABLE customers (
+            customer_id INT IDENTITY(1,1) PRIMARY KEY,
+            name VARCHAR(100) NOT NULL,
+            phone VARCHAR(20),
+            email VARCHAR(100),
+            address VARCHAR(255)
+        );
+        
+        CREATE TABLE suppliers (
+            supplier_id INT IDENTITY(1,1) PRIMARY KEY,
+            name VARCHAR(100) NOT NULL,
+            phone VARCHAR(20),
+            email VARCHAR(100),
+            address VARCHAR(255)
+        );
+        
+        CREATE TABLE products (
+            product_id INT IDENTITY(1,1) PRIMARY KEY,
+            name VARCHAR(100) NOT NULL,
+            category VARCHAR(50),
+            price DECIMAL(10,2) NOT NULL,
+            stock_quantity INT NOT NULL DEFAULT 0,
+            supplier_id INT NOT NULL,
+            FOREIGN KEY (supplier_id) REFERENCES suppliers(supplier_id)
+        );
+        
+        CREATE TABLE sales (
+            sale_id INT IDENTITY(1,1) PRIMARY KEY,
+            product_id INT NOT NULL,
+            customer_id INT NOT NULL,
+            quantity INT NOT NULL,
+            sale_price DECIMAL(10,2) NOT NULL,
+            date DATE NOT NULL,
+            FOREIGN KEY (customer_id) REFERENCES customers(customer_id),
+            FOREIGN KEY (product_id) REFERENCES products(product_id)
+        );
+        
+        CREATE TABLE discounts (
+            discount_id INT IDENTITY(1,1) PRIMARY KEY,
+            sale_id INT NOT NULL,
+            discount_percent DECIMAL(5,2) NOT NULL CHECK (discount_percent >= 0 AND discount_percent <= 100),
+            discount_amount DECIMAL(10,2),
+            FOREIGN KEY (sale_id) REFERENCES sales(sale_id)
+        );
+        "
+        
+        # Create your trigger
+        Invoke-Sqlcmd -ServerInstance $Server -Query "
+        USE Bussiness_DB;
+        EXEC('
+        CREATE TRIGGER trg_calc_discount
+        ON discounts
+        AFTER INSERT, UPDATE
+        AS
+        BEGIN
+            UPDATE d
+            SET d.discount_amount = (s.sale_price * d.discount_percent / 100)
+            FROM discounts d
+            INNER JOIN sales s ON d.sale_id = s.sale_id
+            INNER JOIN inserted i ON d.discount_id = i.discount_id;
+        END
+        ');
+        "
+        
+        # Seed the exact records required for your Behave scenario to pass
+        Invoke-Sqlcmd -ServerInstance $Server -Query "
+        USE Bussiness_DB;
+        INSERT INTO departments (department_name) VALUES ('Sales');
+        INSERT INTO employees (name, position, department_id, hire_date) VALUES ('Alice Johnson', 'Sales Manager', 1, '2022-01-15');
+        INSERT INTO customers (name, phone, email, address) VALUES ('Ali Khan', '555-1234', 'ali@example.com', NULL);
+        INSERT INTO suppliers (name, phone, email, address) VALUES ('Test Supplier', '555-0000', 'supplier@example.com', NULL);
+        INSERT INTO products (name, category, price, stock_quantity, supplier_id) VALUES ('Apple iPhone 14', 'Electronics', 950.00, 50, 1);
+        INSERT INTO sales (product_id, customer_id, quantity, sale_price, date) VALUES (1, 1, 2, 950.00, '2025-08-10');
+        "
+
+    # 5. Run Behave tests
+    - name: Run Automated Behave Tests
+      run: |
+        behave
